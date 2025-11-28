@@ -1,0 +1,37 @@
+{
+    "_meta": {
+        "school": "example",
+        "version": "1.0.0",
+        "source": "示例：八卦方位，仅用于结构和测试",
+        "last_updated": "2025-11-28",
+        "notes": "方位仅为占位示例，后续可按任意学派重新定义。"
+    },
+    "domain": "trigram",
+    "kind": "direction.example",
+    "mapping": {
+        "trigram:0": {
+            "direction": "N"
+        },
+        "trigram:1": {
+            "direction": "NE"
+        },
+        "trigram:2": {
+            "direction": "E"
+        },
+        "trigram:3": {
+            "direction": "SE"
+        },
+        "trigram:4": {
+            "direction": "S"
+        },
+        "trigram:5": {
+            "direction": "SW"
+        },
+        "trigram:6": {
+            "direction": "W"
+        },
+        "trigram:7": {
+            "direction": "NW"
+        }
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "_meta": {
+        "school": "example",
+        "version": "1.0.0",
+        "source": "示例：八卦五行，仅用于结构和测试",
+        "last_updated": "2025-11-28",
+        "notes": "五行归属仅为占位示例，后续可按任意体系调整。"
+    },
+    "domain": "trigram",
+    "kind": "wuxing.main",
+    "mapping": {
+        "trigram:0": {
+            "element": "金"
+        },
+        "trigram:1": {
+            "element": "金"
+        },
+        "trigram:2": {
+            "element": "火"
+        },
+        "trigram:3": {
+            "element": "木"
+        },
+        "trigram:4": {
+            "element": "木"
+        },
+        "trigram:5": {
+            "element": "水"
+        },
+        "trigram:6": {
+            "element": "土"
+        },
+        "trigram:7": {
+            "element": "土"
+        }
+    }
+}

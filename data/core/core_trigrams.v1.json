@@ -1,0 +1,52 @@
+{
+    "_meta": {
+        "school": "core",
+        "version": "1.0.0",
+        "source": "八卦名称示例，仅作结构演示",
+        "last_updated": "2025-11-28",
+        "notes": "当前 id=0..7 与具体卦象（二进制爻序）的对应关系为占位方案，未来可按需要重新定义。"
+    },
+    "trigrams": {
+        "0": {
+            "id": 0,
+            "name_zh": "乾",
+            "name_pinyin": "qian"
+        },
+        "1": {
+            "id": 1,
+            "name_zh": "兑",
+            "name_pinyin": "dui"
+        },
+        "2": {
+            "id": 2,
+            "name_zh": "离",
+            "name_pinyin": "li"
+        },
+        "3": {
+            "id": 3,
+            "name_zh": "震",
+            "name_pinyin": "zhen"
+        },
+        "4": {
+            "id": 4,
+            "name_zh": "巽",
+            "name_pinyin": "xun"
+        },
+        "5": {
+            "id": 5,
+            "name_zh": "坎",
+            "name_pinyin": "kan"
+        },
+        "6": {
+            "id": 6,
+            "name_zh": "艮",
+            "name_pinyin": "gen"
+        },
+        "7": {
+            "id": 7,
+            "name_zh": "坤",
+            "name_pinyin": "kun"
+        }
+    },
+    "hexagrams": {}
+}

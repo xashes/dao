@@ -139,10 +139,10 @@
   (gua bits-list))
 
 ;; ------------------------------------------------------------
-;; 接口函数：gua-yao
+;; 接口函数：yao-ref   （原 gua-yao）
 ;;
 ;; 签名：
-;;   gua-yao :
+;;   yao-ref :
 ;;     gua? exact-nonnegative-integer? -> (or/c 0 1)
 ;;
 ;; 输入：
@@ -162,12 +162,12 @@
 ;; 使用场景：
 ;;   - 在实现变卦、互卦、错综等运算时，按位置访问某一爻的阴阳。
 ;; ------------------------------------------------------------
-(define (gua-yao g pos-from-bottom)
+(define (yao-ref g pos-from-bottom)
   (define w (gua-width g))
   (unless (and (integer? pos-from-bottom)
                (<= 0 pos-from-bottom)
                (< pos-from-bottom w))
-    (error 'gua-yao
+    (error 'yao-ref
            "yao position out of range: ~a, width=~a"
            pos-from-bottom w))
   (list-ref (gua-bits g) pos-from-bottom))
@@ -216,29 +216,29 @@
         (bitwise-ior acc (arithmetic-shift 1 i)))))
 
 ;; ------------------------------------------------------------
-;; 接口函数：gua-trigram?
+;; 接口函数：trigram?   （原 gua-trigram?）
 ;;
 ;; 签名：
-;;   gua-trigram? : gua? -> boolean?
+;;   trigram? : gua? -> boolean?
 ;;
 ;; 功能：
 ;;   - 判断给定 Gua 是否为三爻卦（宽度 = 3）。
 ;;   - 只关心爻数，不涉及具体卦名。
 ;; ------------------------------------------------------------
-(define (gua-trigram? g)
+(define (trigram? g)
   (= (gua-width g) 3))
 
 ;; ------------------------------------------------------------
-;; 接口函数：gua-hexagram?
+;; 接口函数：hexagram?   （原 gua-hexagram?）
 ;;
 ;; 签名：
-;;   gua-hexagram? : gua? -> boolean?
+;;   hexagram? : gua? -> boolean?
 ;;
 ;; 功能：
 ;;   - 判断给定 Gua 是否为六爻卦（宽度 = 6）。
 ;;   - 只关心爻数，不涉及具体卦名或卦序。
 ;; ------------------------------------------------------------
-(define (gua-hexagram? g)
+(define (hexagram? g)
   (= (gua-width g) 6))
 
 ;; ------------------------------------------------------------
@@ -260,9 +260,9 @@
   (define g1 (make-gua-from-bits '(1 0 0 0 0 0)))
   (unless (= (gua->int g1) 1)
     (error 'self-test "g1 integer encoding should be 1, got ~a" (gua->int g1)))
-  (unless (= (gua-yao g1 0) 1)
+  (unless (= (yao-ref g1 0) 1)
     (error 'self-test "g1: yao 0 should be 1"))
-  (unless (= (gua-yao g1 5) 0)
+  (unless (= (yao-ref g1 5) 0)
     (error 'self-test "g1: yao 5 should be 0"))
 
   ;; 2. 只有上爻为阳：对应最高位为 1
@@ -272,9 +272,9 @@
     (error 'self-test
            "g2 integer encoding should be ~a, got ~a"
            expected2 (gua->int g2)))
-  (unless (= (gua-yao g2 5) 1)
+  (unless (= (yao-ref g2 5) 1)
     (error 'self-test "g2: yao 5 should be 1"))
-  (unless (= (gua-yao g2 0) 0)
+  (unless (= (yao-ref g2 0) 0)
     (error 'self-test "g2: yao 0 should be 0"))
 
   ;; 3. 列表 round-trip：bits -> gua -> bits
@@ -287,7 +287,7 @@
 
   ;; 4. 三爻卦示例
   (define g4 (make-gua-from-bits '(1 0 1)))
-  (unless (and (gua-trigram? g4) (not (gua-hexagram? g4)))
+  (unless (and (trigram? g4) (not (hexagram? g4)))
     (error 'self-test "g4 should be trigram but not hexagram"))
   (unless (= (gua->int g4) #b101)
     (error 'self-test "g4 integer encoding should be 0b101, got ~a" (gua->int g4)))
@@ -302,11 +302,6 @@
 
 ;; ------------------------------------------------------------
 ;; 对外提供的接口及其 contract
-;;
-;; 说明：
-;;   - 通过 contract-out 为所有导出符号附加类型约束。
-;;   - struct gua 的 bits 字段被约束为 (listof (or/c 0 1))，
-;;     表示自下而上的 0/1 列表。
 ;; ------------------------------------------------------------
 (provide
   (contract-out
@@ -317,9 +312,8 @@
     (-> (and/c (listof (or/c 0 1)) (not/c empty?)) gua?)]
    [make-gua-from-int
     (-> exact-nonnegative-integer? exact-positive-integer? gua?)]
-   [gua-yao          (-> gua? exact-nonnegative-integer? (or/c 0 1))]
+   [yao-ref          (-> gua? exact-nonnegative-integer? (or/c 0 1))]
    [gua-bits-list    (-> gua? (listof (or/c 0 1)))]
    [gua->int         (-> gua? exact-nonnegative-integer?)]
-   [gua-trigram?     (-> gua? boolean?)]
-   [gua-hexagram?    (-> gua? boolean?)]
-   [self-test        (-> void?)]))
+   [trigram?         (-> gua? boolean?)]
+   [hexagram?        (-> gua? boolean?)]))

@@ -215,6 +215,19 @@
         (bitwise-ior acc (arithmetic-shift 1 i)))))
 
 ;; ------------------------------------------------------------
+;; 接口函数：gua-id
+;;
+;; 签名：
+;;   gua-id : gua? -> exact-nonnegative-integer?
+;;
+;; 功能：
+;;   - 返回当前系统中用于标识该卦的“卦 id”。
+;;   - 当前实现等价于 gua->int，以后如需更改编码方案，只需调整此函数。
+;; ------------------------------------------------------------
+(define (gua-id g)
+  (gua->int g))
+
+;; ------------------------------------------------------------
 ;; 接口函数：trigram?
 ;;
 ;; 签名：
@@ -258,6 +271,7 @@
    [yao-ref          (-> gua? exact-nonnegative-integer? (or/c 0 1))]
    [gua-bits-list    (-> gua? (listof (or/c 0 1)))]
    [gua->int         (-> gua? exact-nonnegative-integer?)]
+   [gua-id          (-> gua? exact-nonnegative-integer?)]
    [trigram?         (-> gua? boolean?)]
    [hexagram?        (-> gua? boolean?)]))
 
@@ -341,4 +355,5 @@
           [max-bits (sub1 (arithmetic-shift 1 width))]
           [too-big  (+ max-bits 1)])
      (check-exn exn:fail?
-       (λ () (make-gua-from-int too-big width))))))
+       (λ () (make-gua-from-int too-big width)))))
+  )

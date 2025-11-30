@@ -1,0 +1,152 @@
+#lang racket
+
+;; 单元测试 & 用法示例：配合 gua-core.rkt 使用
+;;
+;; 用法：
+;;   1. 确保 gua-core.rkt 和本文件在同一目录下
+;;   2. 在该目录执行：
+;;        racket gua-core-test.rkt
+;;      或在 DrRacket 里点击 Run
+
+(require rackunit          ; 断言库
+         rackunit/text-ui  ; 控制台运行测试
+         "gua-core.rkt")   ; 被测模块
+
+;; 定义一个总测试套件，包含多组测试用例
+(define gua-core-tests
+  (test-suite
+   "gua-core full API tests"
+
+   ;; ------------------------------------------------------------
+   ;; 1. 从 bit 列表构造六爻卦：演示 make-gua-from-bits / gua? / gua-width /
+   ;;    gua-bits-list / gua->int / gua-yao 的基础用法
+   ;; ------------------------------------------------------------
+   (test-case
+    "construct hexagram from bits list"
+    ;; 构造一个六爻卦，自下而上为：阳 阴 阳 阴 阳 阴
+    (define g (make-gua-from-bits '(1 0 1 0 1 0)))
+
+    ;; gua? 用于判断一个值是不是 gua-core 定义的 Gua 值
+    (check-true (gua? g))
+
+    ;; 宽度应该是 6（六爻卦）
+    (check-equal? (gua-width g) 6)
+
+    ;; 自下而上的 bit 列表应该与构造时一致
+    (check-equal? (gua-bits-list g) '(1 0 1 0 1 0))
+
+    ;; 整数编码：bit0 = 1, bit2 = 1, bit4 = 1 → 1 + 4 + 16 = 21
+    (check-equal? (gua->int g) 21)
+
+    ;; gua-yao：按位置从下往上访问单爻
+    (check-equal? (gua-yao g 0) 1) ; 初爻：阳
+    (check-equal? (gua-yao g 1) 0) ; 二爻：阴
+    (check-equal? (gua-yao g 2) 1) ; 三爻：阳
+    (check-equal? (gua-yao g 3) 0) ; 四爻：阴
+    (check-equal? (gua-yao g 4) 1) ; 五爻：阳
+    (check-equal? (gua-yao g 5) 0)) ; 上爻：阴
+   ))
+
+   ;; ------------------------------------------------------------
+   ;; 2. 从整数 + 宽度构造六爻卦：演示 make-gua-from-int 与
+   ;;    make-gua-from-bits 的 round-trip 关系
+   ;; ------------------------------------------------------------
+   (test-case
+    "construct hexagram from int and width"
+    ;; bits-int = 21（二进制 010101，自下而上 1 0 1 0 1 0），宽度 6
+    (define g (make-gua-from-int 21 6))
+
+    ;; 依然是一个合法的 Gua
+    (check-true (gua? g))
+
+    ;; 宽度 6
+    (check-equal? (gua-width g) 6)
+
+    ;; 还原成列表，与预期一致
+    (check-equal? (gua-bits-list g) '(1 0 1 0 1 0))
+
+    ;; 再次转回整数，应仍为 21
+    (check-equal? (gua->int g) 21))
+
+   ;; ------------------------------------------------------------
+   ;; 3. 三爻卦示例：演示 gua-trigram? / gua-hexagram? 的用法
+   ;; ------------------------------------------------------------
+   (test-case
+    "trigram vs hexagram predicates"
+    ;; 自下而上：阳 阳 阴
+    (define g3 (make-gua-from-bits '(1 1 0)))
+
+    ;; 宽度为 3
+    (check-equal? (gua-width g3) 3)
+
+    ;; 是三爻卦，但不是六爻卦
+    (check-true  (gua-trigram? g3))
+    (check-false (gua-hexagram? g3))
+
+    ;; 整数编码：bit0 = 1, bit1 = 1, bit2 = 0 → 1 + 2 = 3
+    (check-equal? (gua->int g3) 3)
+
+    ;; 访问单爻
+    (check-equal? (gua-yao g3 0) 1) ; 初爻：阳
+    (check-equal? (gua-yao g3 1) 1) ; 二爻：阳
+    (check-equal? (gua-yao g3 2) 0)) ; 上爻：阴
+
+   ;; ------------------------------------------------------------
+   ;; 4. gua? 判别：既要对 Gua 返回 #t，对非 Gua 返回 #f
+   ;; ------------------------------------------------------------
+   (test-case
+    "gua? predicate behavior"
+    (define g (make-gua-from-bits '(1 0 1 0 1 0)))
+    (check-true  (gua? g))
+    (check-false (gua? 42))
+    (check-false (gua? '(1 0 1)))
+    (check-false (gua? "not-a-gua")))
+
+   ;; ------------------------------------------------------------
+   ;; 5. gua-yao 越界访问：应抛出异常
+   ;; ------------------------------------------------------------
+   (test-case
+    "gua-yao out of range"
+    (define g (make-gua-from-bits '(1 0 1 0 1 0)))
+    ;; 位置为 -1：非法
+    (check-exn exn:fail?
+      (lambda () (gua-yao g -1)))
+    ;; 位置等于 width：非法（最大合法 index = width - 1）
+    (check-exn exn:fail?
+      (lambda () (gua-yao g (gua-width g))))
+    ;; 大于 width 的位置同样非法
+    (check-exn exn:fail?
+      (lambda () (gua-yao g (+ 10 (gua-width g))))))
+
+   ;; ------------------------------------------------------------
+   ;; 6. make-gua-from-bits 的非法输入：空列表 / 列表元素非 0/1
+   ;; ------------------------------------------------------------
+   (test-case
+    "make-gua-from-bits invalid inputs"
+    ;; 空列表：不允许
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-bits '())))
+    ;; 元素不是 0 或 1：不允许
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-bits '(1 2 0))))
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-bits '(1 -1 0))))
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-bits '(1 "x" 0)))))
+
+   ;; ------------------------------------------------------------
+   ;; 7. make-gua-from-int 的非法输入：
+   ;;    - width 非正
+   ;;    - bits-int 为负
+   ;;    - bits-int 超出 [0, 2^width - 1]
+   ;; ------------------------------------------------------------
+   (test-case
+    "make-gua-from-int invalid inputs"
+    ;; width 必须是正整数
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-int 0 0)))
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-int 0 -1)))
+    ;; bits-int 必须是非负整数
+    (check-exn exn:fail?
+      (lambda () (make-gua-from-int -1 6))))

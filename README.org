@@ -1,5 +1,425 @@
-#+title: 说明
+#+title: 卦结构建模库（Racket 版）
+#+author: xashes
+#+language: zh-CN
 
+* 概览
+
+这个目录下是一套用 Racket 实现的「卦的结构层」建模库。目标是：
+
+- *只处理结构，不处理占筮与象义*：
+  - 把卦当成一串自下而上的 0/1 比特序列；
+  - 0 表示阴爻，1 表示阳爻；
+  - 不涉及卦名、爻辞、五行、象传等解释部分。
+- 提供 *统一的底层类型* ~gua~，在此基础上建立：
+  - 三爻卦视图（trigram）
+  - 六爻卦视图（hexagram）
+- API 尽量：
+  - 纯函数、无副作用；
+  - 使用 Racket 合约（contract）约束输入输出；
+  - 用 ~module+ test~ + ~rackunit~ 做单元测试。
+
+目前实现的是「结构层 + 部分三爻/六爻运算」，后续可以在此基础上继续加「卦名映射、序号、解释」等更高层模块。
+
+* 数据与约定
+
+** 卦的表示
+
+- 使用一个透明结构体 ~gua~：
+
+  - 字段：~bits : (listof 0/1)~
+  - 列表顺序：*自下而上*：
+    - 第 0 个元素：初爻（最下）
+    - 第 1 个元素：二爻
+    - ...
+    - 最后一个元素：上爻（最上）
+
+- 统一的整数编码约定：
+
+  - bit0 = 初爻
+  - bit1 = 二爻
+  - ...
+  - bit(width-1) = 上爻
+
+  换句话说：整数的第 ~i~ 位就是自下而上的第 ~i~ 爻。
+
+** 宽度与「子类型」概念
+
+- 底层只有一个结构类型：~gua~
+- 在此基础上定义两个「语义子集」：
+  - ~trigram?~: width = 3 的三爻卦视图
+  - ~hexagram?~: width = 6 的六爻卦视图
+- 我们没有新建 struct 子类型，而是通过：
+  - 谓词 (~trigram?~ / ~hexagram?~)
+  - 合约 (~and/c gua? trigram?~ 等)
+  来表达「这是一个三爻/六爻卦」。
+
+这样可以保持结构层简单统一，同时又在需要的地方区分三爻 / 六爻 API。
+
+* 模块结构总览
+
+本子库目前包含四个核心 Racket 模块：
+
+- ~gua-core.rkt~
+  - 定义 ~gua~ 结构及基础 API（构造、访问、编码）。
+  - 提供 ~trigram?~ / ~hexagram?~ 谓词。
+- ~gua-core-operations.rkt~
+  - 在 ~gua~ 上定义通用结构操作：
+    - 单爻翻转、多爻翻转、错卦、综卦、裁剪、拼接、高阶变换等。
+- ~gua-trigram.rkt~
+  - 三爻卦视图模块：
+    - 三爻卦的构造 ~make-trigram-from-bits/int~
+    - ~ensure-trigram~ 等。
+- ~gua-hexagram.rkt~
+  - 六爻卦视图模块：
+    - 六爻卦构造 ~make-hexagram-from-bits/int~
+    - 上下卦拆分/组合
+    - 互卦、变卦（语义层别名）。
+
+所有模块都使用 ~contract-out~ 导出 API，并在文件底部通过 ~module+ test~ 写单元测试。
+
+* 模块与 API 详情
+
+** gua-core.rkt
+
+统一的底层类型与编码逻辑。
+
+*** 基础类型与谓词
+
+- ~struct gua ([bits (listof (or/c 0 1))])~
+  - 透明结构体，便于在 REPL 中观察。
+- ~gua? : any/c -> boolean?~
+  - 自动随结构体生成。
+- ~trigram? : gua? -> boolean?~
+  - 判断 ~gua-width = 3~。
+- ~hexagram? : gua? -> boolean?~
+  - 判断 ~gua-width = 6~。
+
+*** 构造与访问
+
+- ~gua-width : gua? -> exact-positive-integer?~
+  - 返回爻数（bits 的长度）。
+
+- ~make-gua-from-bits :
+    (and/c (listof (or/c 0 1)) (not/c empty?)) -> gua?~
+  - 从自下而上的 0/1 列表构造 ~gua~。
+  - 列表必须非空，元素必须为 0 或 1，否则抛错。
+
+- ~make-gua-from-int :
+    exact-nonnegative-integer? exact-positive-integer? -> gua?~
+  - 从整数 + 宽度构造 ~gua~。
+  - 要求 ~0 <= bits-int <= 2^width - 1~，否则抛错。
+  - bit0 = 初爻，bit(width-1) = 上爻。
+
+- ~yao-ref :
+    gua? exact-nonnegative-integer? -> (or/c 0 1)~
+  - 按位置取单爻（0 为最下）。
+  - 越界抛错。
+
+- ~gua-bits-list : gua? -> (listof (or/c 0 1))~
+  - 取出自下而上的 bits 列表，适合做 list 操作。
+
+- ~gua->int : gua? -> exact-nonnegative-integer?~
+  - 将 ~gua~ 编码为整数。
+  - 保证返回值在 ~[0, 2^width - 1]~。
+
+*** 简单使用示例
+
+#+begin_src racket
+(require "gua-core.rkt")
+
+(define g (make-gua-from-bits '(1 0 1 0 1 0))) ; 六爻卦
+(gua-width g)          ; => 6
+(gua->int g)           ; => 21
+(yao-ref g 0)          ; => 1  ; 初爻
+(yao-ref g 5)          ; => 0  ; 上爻
+(trigram? g)           ; => #f
+(hexagram? g)          ; => #t
+#+end_src
+
+** gua-core-operations.rkt
+
+对任意宽度的 ~gua~ 做结构变换的通用 API。
+
+*** 单爻 / 多爻翻转
+
+- ~flip-yao :
+    gua? exact-nonnegative-integer? -> gua?~
+  - 翻转指定位置的一爻，返回新 ~gua~。
+
+- ~flip-yaos :
+    gua? (listof exact-nonnegative-integer?) -> gua?~
+  - 按给定位置列表依次翻转多条爻。
+  - 对任意宽度的 ~gua~ 都适用（三爻、六爻等）。
+  - 越界索引抛错，重复索引会导致同一爻被翻转多次（奇数次 = 取反）。
+
+*** 错卦 / 综卦（通用版本）
+
+- ~cuo-gua : gua? -> gua?~
+  - 对所有爻取反：0 -> 1, 1 -> 0。
+  - 在六爻语境下对应传统「错卦」，在三爻下也有自然的结构含义。
+
+- ~zong-gua : gua? -> gua?~
+  - 将爻顺序上下颠倒（列表反转）。
+  - 在六爻语境下对应传统「综卦」。
+
+*** 裁剪 / 拼接 / 高阶 map
+
+- ~sub-gua :
+    gua? exact-nonnegative-integer? exact-positive-integer? -> gua?~
+  - 从给定 ~gua~ 中按「自下而上」截取连续爻：
+    - ~start-pos~：起始位置（0 为最下）
+    - ~length~：截取长度
+  - 要求 ~start-pos + length <= gua-width~，否则抛错。
+
+- ~concat-gua :
+    gua? gua? -> gua?~
+  - 以第一个参数为下卦，第二个为上卦，拼接成新的 ~gua~。
+  - 新 bits = 下卦 bits ++ 上卦 bits。
+
+- ~map-yao :
+    (-> (or/c 0 1) (or/c 0 1)) gua? -> gua?~
+  - 高阶操作：对每一爻应用一个变换函数。
+  - 例如可以轻松写出各种「只对某种爻变换」的操作。
+
+*** 示例
+
+#+begin_src racket
+(require "gua-core.rkt"
+         "gua-core-operations.rkt")
+
+(define g (make-gua-from-bits '(1 0 1 0 1 0)))
+
+;; 翻转第三爻（index 2）
+(define g1 (flip-yao g 2))        ; bits => '(1 0 0 0 1 0)
+
+;; 多爻翻转：动 0、2、5
+(define g2 (flip-yaos g '(0 2 5))) ; bits => '(0 0 0 0 1 1)
+
+;; 错卦 / 综卦（对任意宽度的卦都可以）
+(define g-cuo  (cuo-gua g))        ; '(0 1 0 1 0 1)
+(define g-zong (zong-gua g))       ; '(0 1 0 1 0 1)
+
+;; 取中间三爻
+(define g-mid (sub-gua g 1 3))     ; '(0 1 0)
+
+;; 拼接两个三爻卦变成六爻卦
+(define lower (make-gua-from-bits '(1 1 0)))
+(define upper (make-gua-from-bits '(0 0 1)))
+(define h (concat-gua lower upper)) ; '(1 1 0 0 0 1)
+#+end_src
+
+** gua-trigram.rkt
+
+三爻卦视图，仅在 ~gua~ 上做「width=3」的语义包装。
+
+*** 构造与校验
+
+- ~make-trigram-from-bits :
+    (listof (or/c 0 1)) -> (and/c gua? trigram?)~
+  - 仅接受长度为 3 的 bit 列表。
+- ~make-trigram-from-int :
+    exact-nonnegative-integer? -> (and/c gua? trigram?)~
+  - 调用 ~make-gua-from-int bits-int 3~。
+- ~ensure-trigram :
+    gua? -> (and/c gua? trigram?)~
+  - 若 ~gua-width != 3~ 则抛错，否则原样返回。
+
+*** 工具函数
+
+- ~trigram-duplicate->hexagram :
+    (and/c gua? trigram?) -> (and/c gua? hexagram?)~
+  - 将一个 trigram 作为下卦，自上而上再接一个相同 trigram，得到一个六爻卦。
+
+*** 示例
+
+#+begin_src racket
+(require "gua-core.rkt"
+         "gua-trigram.rkt")
+
+(define t (make-trigram-from-bits '(1 0 1)))
+(trigram? t)           ; => #t
+(hexagram? t)          ; => #f
+(gua->int t)           ; => 5
+
+;; 复制成六爻卦
+(define h (trigram-duplicate->hexagram t))
+(hexagram? h)          ; => #t
+(gua-bits-list h)      ; => '(1 0 1 1 0 1)
+#+end_src
+
+** gua-hexagram.rkt
+
+六爻卦视图，封装「上下卦」与互卦/变卦等结构操作。
+
+*** 构造与校验
+
+- ~make-hexagram-from-bits :
+    (listof (or/c 0 1)) -> (and/c gua? hexagram?)~
+  - 仅接受长度为 6 的 bit 列表。
+
+- ~make-hexagram-from-int :
+    exact-nonnegative-integer? -> (and/c gua? hexagram?)~
+  - 调用 ~make-gua-from-int bits-int 6~。
+
+- ~ensure-hexagram :
+    gua? -> (and/c gua? hexagram?)~
+  - 若 ~gua-width != 6~ 则抛错，否则原样返回。
+
+*** 上下卦拆分与组合
+
+- ~hexagram-split :
+    (and/c gua? hexagram?)
+    -> (values (and/c gua? trigram?)
+               (and/c gua? trigram?))~
+  - 将六爻卦拆成下卦 / 上卦两个三爻卦。
+  - bits = ~(b0 b1 b2 b3 b4 b5)~ =>
+    - 下卦：(b0 b1 b2)
+    - 上卦：(b3 b4 b5)
+
+- ~hexagram-join :
+    (and/c gua? trigram?)
+    (and/c gua? trigram?)
+    -> (and/c gua? hexagram?)~
+  - 下卦 + 上卦 拼成 六爻卦：
+    - bits = lower.bits ++ upper.bits
+
+*** 互卦
+
+- ~hexagram-mutual :
+    (and/c gua? hexagram?) -> (and/c gua? hexagram?)~
+  - 本实现选择的一种常见结构规则：
+    - 原 bits = ~(b0 b1 b2 b3 b4 b5)~
+    - 下互卦 = ~(b1 b2 b3)~
+    - 上互卦 = ~(b2 b3 b4)~
+    - 然后 ~hexagram-join~ 合成新的六爻卦。
+
+*** 变卦（六爻语义别名）
+
+- ~hexagram-changing :
+    (and/c gua? hexagram?)
+    (listof exact-nonnegative-integer?)
+    -> (and/c gua? hexagram?)~
+  - 结构上是对六爻卦调用通用的 ~flip-yaos~，然后用 ~ensure-hexagram~ 保证结果仍是六爻。
+  - 参数 ~changing-lines~ 是动爻位置列表（0 为初爻）。
+
+*** 示例
+
+#+begin_src racket
+(require "gua-core.rkt"
+         "gua-trigram.rkt"
+         "gua-hexagram.rkt"
+         "gua-core-operations.rkt")
+
+;; 构造一个六爻卦
+(define h (make-hexagram-from-bits '(1 0 1 0 1 0)))
+
+;; 拆分成上下卦
+(define-values (lower upper) (hexagram-split h))
+(gua-bits-list lower) ; => '(1 0 1)
+(gua-bits-list upper) ; => '(0 1 0)
+
+;; 再拼回六爻卦
+(define h2 (hexagram-join lower upper))
+(gua-bits-list h2)    ; => '(1 0 1 0 1 0)
+
+;; 互卦
+(define h-mut (hexagram-mutual h))
+(gua-bits-list h-mut) ; => '(0 1 0 1 0 1)
+
+;; 变卦（动 0、2、5 爻）
+(define h-chg (hexagram-changing h '(0 2 5)))
+(gua-bits-list h-chg) ; => '(0 0 0 0 1 1)
+
+;; 或直接用结构层的 cuo-gua / zong-gua（错卦 / 综卦）
+(gua-bits-list (cuo-gua h)) ; => '(0 1 0 1 0 1)
+(gua-bits-list (zong-gua h)); => '(0 1 0 1 0 1)
+#+end_src
+
+* 测试与质量保证
+
+** 测试方式
+
+每个模块底部都有：
+
+#+begin_src racket
+(module+ test
+  (require rackunit)
+  ;; 若干 test-case / check-... 断言
+  ...)
+#+end_src
+
+运行方式：
+
+#+begin_src sh
+raco test gua-core.rkt
+raco test gua-core-operations.rkt
+raco test gua-trigram.rkt
+raco test gua-hexagram.rkt
+#+end_src
+
+- 测试集中在：
+  - 构造函数的正常 / 非法输入；
+  - bits <-> int 的 round-trip；
+  - 三爻/六爻谓词与 ensure 函数；
+  - 各种结构操作（翻转、互卦、变卦等）的结果是否符合约定。
+
+** 合约（contract）
+
+对外 API 都通过 ~contract-out~ 指定了输入输出的基本约束，例如：
+
+- 只接受非负整数 / 正整数；
+- 要求 bits 列表非空且元素为 0/1；
+- 某些函数只接受 ~trigram?~ / ~hexagram?~ 的 ~gua~。
+
+内部实现中则保留了对「跨参数关系」的不变量检查（例如 bits-int 在合法范围内、索引没有越界），确保模块内部调用也不会悄悄走错。
+
+* 设计决策摘要
+
+- *统一的基础类型*：只用一个 ~gua~ 结构体，避免早期过度拆分类型。
+- *语义子类型*：trigram / hexagram 不用新 struct，而是通过：
+  - 谓词（~trigram?~ / ~hexagram?~）
+  - 合约（~and/c gua? trigram?~ 等）
+  表达约束，在将来需要时也可以平滑迁移到 Typed Racket 的真正子类型。
+- *分层设计*：
+  - ~gua-core.rkt~：只负责底层表示和编码；
+  - ~gua-core-operations.rkt~：只负责结构运算，不谈「三/六」；
+  - ~gua-trigram.rkt~, ~gua-hexagram.rkt~：在上层增加视角与语义别名。
+- *list 表示而非 vector*：
+  - 当前操作以结构变换为主，list 足够高效且更易于用 Racket 常规工具处理；
+  - 不急于为未来的性能做 premature optimization，有实际瓶颈再考虑 vector/byte-string 等替代表示。
+
+* 后续规划（Roadmap）
+
+可以考虑的后续工作方向：
+
+- *解释层模块*（例如 ~gua-meaning.rkt~）：
+  - 为 trigram / hexagram 关联卦名、卦序（如经传中的编号）、方位、五行等信息；
+  - 提供从「卦结构」到「易学解释」的映射。
+- *更丰富的结构运算*：
+  - 增加不同学派定义下的互卦算法（可以支持多种规则，并在 API 中显式区分）。
+- *Typed Racket 迁移草案*：
+  - 在保持现有 API 的基础上，引入 ~#lang typed/racket~ 版本，明确化 ~Trigram / Hexagram~ 的类型；
+  - 利用类型系统在编译期发现更多错误。
+- *与其他语言/模块的联动*：
+  - 若有 Python / Haskell / 其他语言的卦结构库，可以约定统一的整数编码，以便互通。
+
+* 如何开始使用
+
+1. 在 Racket 代码中引入需要的模块，例如：
+
+   #+begin_src racket
+   (require "gua-core.rkt"
+            "gua-core-operations.rkt"
+            "gua-trigram.rkt"
+            "gua-hexagram.rkt")
+   #+end_src
+
+2. 使用 ~make-gua-from-bits/int~ + ~gua-core-operations~ 完成结构层处理；
+3. 在需要三爻/六爻语义时，通过 ~make-trigram-from-...~ / ~make-hexagram-from-...~ 或 ~ensure-trigram / ensure-hexagram~ 切换到相应视图。
+
+整个库目前停留在「低层结构 + 少量传统运算规则」阶段，后续可以在此基础上逐步搭建更完整的易学建模体系。
 * 开发日志
 ** 2025-11-30
 为卦建模
+该讨论八卦的存储方式了。
+整个数据的核心应该是八卦、五行。

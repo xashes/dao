@@ -92,8 +92,7 @@
     (unless (valid-bit? b)
       (error 'make-gua-from-bits
              "bits-list[~a] must be 0 or 1, got ~a" i b)))
-  ;; Racket 的普通列表本身是不可变的（除非使用 mcons），
-  ;; 可以直接作为不可变值存入结构体。
+  ;; 普通 list 在一般使用下视为不可变值，直接存入结构体即可。
   (gua bits-list))
 
 ;; ------------------------------------------------------------
@@ -139,7 +138,7 @@
   (gua bits-list))
 
 ;; ------------------------------------------------------------
-;; 接口函数：yao-ref   （原 gua-yao）
+;; 接口函数：yao-ref   （按位置取某一爻）
 ;;
 ;; 签名：
 ;;   yao-ref :
@@ -216,7 +215,7 @@
         (bitwise-ior acc (arithmetic-shift 1 i)))))
 
 ;; ------------------------------------------------------------
-;; 接口函数：trigram?   （原 gua-trigram?）
+;; 接口函数：trigram?
 ;;
 ;; 签名：
 ;;   trigram? : gua? -> boolean?
@@ -229,7 +228,7 @@
   (= (gua-width g) 3))
 
 ;; ------------------------------------------------------------
-;; 接口函数：hexagram?   （原 gua-hexagram?）
+;; 接口函数：hexagram?
 ;;
 ;; 签名：
 ;;   hexagram? : gua? -> boolean?
@@ -242,66 +241,10 @@
   (= (gua-width g) 6))
 
 ;; ------------------------------------------------------------
-;; 自检函数：self-test
-;;
-;; 签名：
-;;   self-test : -> void?
-;;
-;; 功能：
-;;   - 对本模块的核心行为做一次简易回归测试：
-;;       1. 检查底爻/上爻与 bit 位的对应关系。
-;;       2. 检查 bits-list <-> int 的 round-trip 是否保持一致。
-;;       3. 检查三爻卦/六爻卦的判定逻辑。
-;;   - 若任何断言失败，将抛出错误。
-;;   - 若全部通过，将打印 “gua-core (list) self-test passed.”。
-;; ------------------------------------------------------------
-(define (self-test)
-  ;; 1. 底爻是 bit0：初爻为阳，其余为阴
-  (define g1 (make-gua-from-bits '(1 0 0 0 0 0)))
-  (unless (= (gua->int g1) 1)
-    (error 'self-test "g1 integer encoding should be 1, got ~a" (gua->int g1)))
-  (unless (= (yao-ref g1 0) 1)
-    (error 'self-test "g1: yao 0 should be 1"))
-  (unless (= (yao-ref g1 5) 0)
-    (error 'self-test "g1: yao 5 should be 0"))
-
-  ;; 2. 只有上爻为阳：对应最高位为 1
-  (define g2 (make-gua-from-bits '(0 0 0 0 0 1)))
-  (define expected2 (arithmetic-shift 1 5))
-  (unless (= (gua->int g2) expected2)
-    (error 'self-test
-           "g2 integer encoding should be ~a, got ~a"
-           expected2 (gua->int g2)))
-  (unless (= (yao-ref g2 5) 1)
-    (error 'self-test "g2: yao 5 should be 1"))
-  (unless (= (yao-ref g2 0) 0)
-    (error 'self-test "g2: yao 0 should be 0"))
-
-  ;; 3. 列表 round-trip：bits -> gua -> bits
-  (define bits3 '(1 1 0 1 0 0))
-  (define g3 (make-gua-from-bits bits3))
-  (unless (equal? (gua-bits-list g3) bits3)
-    (error 'self-test
-           "g3 bits round-trip failed: expected ~a, got ~a"
-           bits3 (gua-bits-list g3)))
-
-  ;; 4. 三爻卦示例
-  (define g4 (make-gua-from-bits '(1 0 1)))
-  (unless (and (trigram? g4) (not (hexagram? g4)))
-    (error 'self-test "g4 should be trigram but not hexagram"))
-  (unless (= (gua->int g4) #b101)
-    (error 'self-test "g4 integer encoding should be 0b101, got ~a" (gua->int g4)))
-
-  (displayln "gua-core (list) self-test passed."))
-
-;; ------------------------------------------------------------
-;; 直接运行本文件时，自动执行自检
-;; ------------------------------------------------------------
-(module+ main
-  (self-test))
-
-;; ------------------------------------------------------------
 ;; 对外提供的接口及其 contract
+;;
+;; 说明：
+;;   - 不再导出 self-test，测试通过 module+ test 管理。
 ;; ------------------------------------------------------------
 (provide
   (contract-out
@@ -317,3 +260,85 @@
    [gua->int         (-> gua? exact-nonnegative-integer?)]
    [trigram?         (-> gua? boolean?)]
    [hexagram?        (-> gua? boolean?)]))
+
+;; ============================================================
+;; 测试：module+ test + rackunit
+;;
+;; 使用方式：
+;;   - 在命令行运行：
+;;       raco test gua-core.rkt
+;;   - 或在 IDE 中运行“test”命令。
+;; ============================================================
+
+(module+ test
+  (require rackunit)
+
+  ;; 1. 底爻是 bit0：初爻为阳，其余为阴
+  (test-case
+   "gua-core: basic encoding, bottom line is bit0"
+   (define g1 (make-gua-from-bits '(1 0 0 0 0 0)))
+   (check-equal? (gua->int g1) 1)
+   (check-equal? (yao-ref g1 0) 1) ; 初爻：阳
+   (check-equal? (yao-ref g1 5) 0)) ; 上爻：阴
+
+  ;; 2. 只有上爻为阳：最高位为 1
+  (test-case
+   "gua-core: top line is highest bit"
+   (define g2 (make-gua-from-bits '(0 0 0 0 0 1)))
+   (define expected2 (arithmetic-shift 1 5))
+   (check-equal? (gua->int g2) expected2)
+   (check-equal? (yao-ref g2 5) 1)
+   (check-equal? (yao-ref g2 0) 0))
+
+  ;; 3. 列表 round-trip：bits -> gua -> bits
+  (test-case
+   "gua-core: bits list round-trip"
+   (define bits3 '(1 1 0 1 0 0))
+   (define g3 (make-gua-from-bits bits3))
+   (check-equal? (gua-bits-list g3) bits3))
+
+  ;; 4. 三爻卦判定
+  (test-case
+   "gua-core: trigram / hexagram predicates"
+   (define g4 (make-gua-from-bits '(1 0 1)))
+   (check-true  (trigram? g4))
+   (check-false (hexagram? g4))
+   (check-equal? (gua->int g4) #b101))
+
+  ;; 5. yao-ref 越界访问
+  (test-case
+   "gua-core: yao-ref out of range"
+   (define g5 (make-gua-from-bits '(1 0 1 0 1 0)))
+   (check-exn exn:fail?
+     (λ () (yao-ref g5 -1)))
+   (check-exn exn:fail?
+     (λ () (yao-ref g5 (gua-width g5))))
+   (check-exn exn:fail?
+     (λ () (yao-ref g5 (+ 10 (gua-width g5))))))
+
+  ;; 6. make-gua-from-bits 非法输入
+  (test-case
+   "gua-core: make-gua-from-bits invalid inputs"
+   (check-exn exn:fail?
+     (λ () (make-gua-from-bits '())))
+   (check-exn exn:fail?
+     (λ () (make-gua-from-bits '(1 2 0))))
+   (check-exn exn:fail?
+     (λ () (make-gua-from-bits '(1 -1 0))))
+   (check-exn exn:fail?
+     (λ () (make-gua-from-bits '(1 "x" 0)))))
+
+  ;; 7. make-gua-from-int 非法输入
+  (test-case
+   "gua-core: make-gua-from-int invalid inputs"
+   (check-exn exn:fail?
+     (λ () (make-gua-from-int 0 0)))
+   (check-exn exn:fail?
+     (λ () (make-gua-from-int 0 -1)))
+   (check-exn exn:fail?
+     (λ () (make-gua-from-int -1 6)))
+   (let* ([width 6]
+          [max-bits (sub1 (arithmetic-shift 1 width))]
+          [too-big  (+ max-bits 1)])
+     (check-exn exn:fail?
+       (λ () (make-gua-from-int too-big width))))))

@@ -388,21 +388,6 @@ raco test gua-hexagram.rkt
   - 当前操作以结构变换为主，list 足够高效且更易于用 Racket 常规工具处理；
   - 不急于为未来的性能做 premature optimization，有实际瓶颈再考虑 vector/byte-string 等替代表示。
 
-* 后续规划（Roadmap）
-
-可以考虑的后续工作方向：
-
-- *解释层模块*（例如 ~gua-meaning.rkt~）：
-  - 为 trigram / hexagram 关联卦名、卦序（如经传中的编号）、方位、五行等信息；
-  - 提供从「卦结构」到「易学解释」的映射。
-- *更丰富的结构运算*：
-  - 增加不同学派定义下的互卦算法（可以支持多种规则，并在 API 中显式区分）。
-- *Typed Racket 迁移草案*：
-  - 在保持现有 API 的基础上，引入 ~#lang typed/racket~ 版本，明确化 ~Trigram / Hexagram~ 的类型；
-  - 利用类型系统在编译期发现更多错误。
-- *与其他语言/模块的联动*：
-  - 若有 Python / Haskell / 其他语言的卦结构库，可以约定统一的整数编码，以便互通。
-
 * 如何开始使用
 
 1. 在 Racket 代码中引入需要的模块，例如：
